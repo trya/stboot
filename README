@@ -1,0 +1,113 @@
+--------------------------------------------------
+stboot - A CEFULL replacement
+and a boot loader for Splashtop-compatible systems
+--------------------------------------------------
+by trya - tryagainprod@gmail.com
+
+DISCLAIMER:
+THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE
+LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER
+PARTIES PROVIDE THE PROGRAM “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO
+THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU. SHOULD THE PROGRAM
+PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING, REPAIR OR
+CORRECTION.
+
+Overview
+--------
+This program enables the use of the Splashtop (and related) start button in
+order to launch an OS other than Splashtop OS, quickly and without having to
+install Splashtop OS itself.
+
+Splashtop OS boot process
+-------------------------
+When the Splashtop button is pressed:
+- After POST, the BIOS loads the option ROM (containing the DeviceVM ROM
+Loader and a CE program) at 0x7c00 and jumps there.
+- The ROM Loader switches the computer to protected mode and transfers control
+to the CE program, looking for splash.idx at the root of a FAT32 or NTFS
+partition in the HDD.
+- If the file is found, then the program will look for CEFULL in the directory
+(except the root) as mentioned in the second line of splash.idx.
+- If CEFULL is present, it is copied to 0x100000 [1] and execution is
+transfered to this address.
+- CEFULL looks for kernel.bin in one of the FAT32 or NTFS partitions, in the
+given directory from splash.idx. kernel.bin is the combination of a vmlinuz and
+an initrd.img.
+- Once kernel.bin is loaded, the rest of Splashtop OS initialization is left
+to the Linux kernel.
+
+[1] as for the Linux kernel bzImages. The CE_BZ files used with systems with
+no Splashtop button or starting Splashtop OS from a USB stick are also bzImages
+(CE_BZ = linux_head.S + CEFULL), which allows starting Splashtop OS from a
+classic boot loader (Splashtop usually uses a custom version of GRUB).
+
+Solutions
+---------
+1. Patch the option ROM, but on the one hand, this solution doesn't come
+without risk and on the other hand, it would be difficult to find a universal
+method, as the integration of Splashtop by manufacturers may vary.
+
+2. Integrate kexec in Splashtop OS, in order to run another kernel from
+Splashtop Linux kernel, but on the one hand, this method required to have
+Splashtop OS installed and on the other hand, you can lose up to 15 seconds
+between booting and kexec call, the time Splashtop OS takes to be initialized.
+
+3. Build a custom kernel.bin, except that the format of kernel.bin remains
+unknown and only Splashtop developers have access to the tools that would
+allow us to build this file.
+
+4. Execute our own boot loader from CEFULL, so we need to write a program that
+reproduces the CEFULL format and switches the computer back to real mode with
+our boot loader copied to 0x7c00, simulating the 19h interrupt without having
+to load specific drivers to access our boot loader from the HDD. stboot is an
+implementation of this method. 
+
+Usage
+-----
+- Assembly:
+The generated CEFULL from stboot.asm consists of a header, the code preparing
+bootstrap and the boot sector "bootsect.bin" of your choice. You can build
+your own CEFULL by assembling stboot.asm with yasm:
+
+  $ cp -f [custom_bootsector] bootsect.bin
+  $ yasm -o CEFULL stboot.asm
+
+- Installation:
+A Splashtop OS installation is not required. On the other hand, a FAT32 or
+NTFS partition is necessary. In our example, the file tree of the partition
+containing CEFULL should look like this :
+
+─┬─stboot/
+ │   │
+ │   └CEFULL  (our own boot loader)
+ │
+ └─splash.idx (shows CEFULL location)
+
+This ready-for-use file tree is available in the root-example directory. At this
+point, the boot loader configuration is entirely up to you. In the default
+installation, the bootsect.bin included in CEFULL is a minimal bootloader which
+looks for and loads the boot sector of the first active partition found.
+
+However, you are free to integrate your own boot sector into CEFULL.
+Typically, extraction of a boot sector in Linux (or any Unix-like) is performed
+with the dd utility like this:
+
+  # dd if=/dev/[disk|partition] of=1st_sect.bin bs=512 count=1
+
+Please refer to the "Assembly" section above for the boot sector integration
+into CEFULL.
+
+Known limitations
+-----------------
+- Memory mapping only occurs in a 32-bit address space, the BIOS apparently
+doesn't do memory hole remapping when booting Splashtop, since Splashtop OS is
+supposed to be 32-bit only. This shouldn't prevent you from loading a 64-bit
+kernel but it will never access more than 4 GB of RAM (and around 3 GB in
+practice because of MMIO).
+- SATA controllers are limited to Compatible (IDE) mode, even if the BIOS
+supports AHCI mode under normal conditions.
+
+---
+END OF README

@@ -1,0 +1,119 @@
+-----------------------------------------------------------------
+stboot - un remplacement de CEFULL
+et un chargeur d'amorçage pour les systèmes compatibles Splashtop
+-----------------------------------------------------------------
+par trya - tryagainprod@gmail.com
+
+DISCLAMER :
+IL N’Y A AUCUNE GARANTIE POUR LE PROGRAMME, DANS LES LIMITES PERMISES PAR LA
+LOI APPLICABLE. À MOINS QUE CELA NE SOIT ÉTABLI DIFFÉREMMENT PAR ÉCRIT, LES
+PROPRIÉTAIRES DE DROITS ET/OU LES AUTRES PARTIES FOURNISSENT LE PROGRAMME « EN
+L’ÉTAT » SANS GARANTIE D’AUCUNE SORTE, QU’ELLE SOIT EXPRIMÉE OU IMPLICITE, CECI
+COMPRENANT, SANS SE LIMITER À CELLES-CI, LES GARANTIES IMPLICITES DE
+COMMERCIALISABILITÉ ET D’ADÉQUATION À UN OBJECTIF PARTICULIER. VOUS ASSUMEZ LE
+RISQUE ENTIER CONCERNANT LA QUALITÉ ET LES PERFORMANCES DU PROGRAMME. DANS
+L’ÉVENTUALITÉ OÙ LE PROGRAMME S’AVÉRERAIT DÉFECTUEUX, VOUS ASSUMEZ LES COÛTS
+DE TOUS LES SERVICES, RÉPARATIONS OU CORRECTIONS NÉCESSAIRES.
+
+Objectif
+--------
+Ce programme permet d'utiliser le bouton de démarrage de Splashtop (et
+apparentés) afin de lancer un OS autre que Splashtop OS, de manière rapide et
+sans avoir à installer Splashtop OS lui-même.
+
+Procédure de démarrage de Splashtop OS
+--------------------------------------
+Quand le bouton Splashtop est pressé :
+- Après le POST, le BIOS charge la ROM option (contenant le DeviceVM ROM Loader
+et un programme CE) à l'adresse 0x7c00 et saute à cet endroit.
+- Le DeviceVM Rom Loader fait passer l'ordinateur en mode protégé et transfère
+le contrôle au programme CE, chargé de rechercher un fichier splash.idx à la
+racine d'une partition FAT32 ou NTFS du disque dur.
+- Si ce fichier est trouvé, alors le programme CE va chercher un fichier CEFULL
+dans le dossier (sauf la racine) indiqué dans la deuxième ligne de splash.idx.
+- Si CEFULL est présent, il est copié à l'adresse 0x100000 [1] et le contrôle
+est passé à cette adresse.
+- CEFULL recherche un fichier kernel.bin dans une des partitions FAT32 ou NTFS
+à l'endroit indiqué par splash.idx. kernel.bin est la combinaison d'un vmlinuz
+et d'un initrd.img.
+- Une fois kernel.bin chargé, le reste de l'initialisation de Splashtop OS est
+laissé au noyau Linux.
+
+[1] comme pour les bzImages du noyau Linux. Les fichiers CE_BZ utilisés avec
+les systèmes n'ayant pas de bouton Splashtop ou démarrant Splashtop OS à partir
+d'une clé USB sont aussi des bzImages (CE_BZ = linux_head.S + CEFULL),
+permettant ainsi le démarrage de Splashtop OS à partir d'un chargeur de
+démarrage classique (Splashtop OS utilise habituellement une version modifiée
+de GRUB).
+
+Solutions
+---------
+1. Patcher la ROM option, mais d'une part, cette solution n'est pas sans risque
+et d'autre part, il serait difficile d'en faire une méthode universelle sachant
+que l'intégration de Splashtop par les constructeurs peut varier.
+
+2. Intégrer kexec dans Splashtop OS, afin de lancer un autre noyau
+à partir du noyau Linux de Splashtop, mais d'une part cette méthode nécessite
+d'avoir installé Splashtop OS et d'autre part, on peut perdre jusqu'à 15
+secondes entre le démarrage de l'ordinateur et l'appel à kexec, le temps
+que Splashtop OS soit initialisé.
+
+3. Construire un kernel.bin personnalisé, sauf que le format de kernel.bin
+reste inconnu et seuls les développeurs de Splashtop ont accès aux outils
+permettant de construire ce fichier.
+
+4. Exécuter notre propre chargeur d'amorçage à partir de CEFULL, ce qui
+nécessite d'écrire un programme reproduisant le format d'un CEFULL et faisant
+repasser l'ordinateur en mode réel avec notre chargeur d'amorçage copié à
+l'adresse 0x7c00, simulant ainsi l'interruption 19h sans avoir à charger des
+pilotes spécifiques pour accéder à notre chargeur d'amorçage sur le disque dur.
+stboot est une implémentation de cette méthode.
+
+Utilisation de stboot
+---------------------
+- Assemblage :
+Le CEFULL généré à partir de stboot.asm est composé d'un en-tête, du code
+préparant l'amorçage et du secteur de boot "bootsect.bin" de votre choix.
+Vous pouvez construire votre propre CEFULL en assemblant stboot.asm avec yasm :
+
+  $ cp -f [custom_bootsector] bootsect.bin
+  $ yasm -o CEFULL stboot.asm
+
+- Installation :
+Une installation de Splashtop OS n'est pas nécessaire, une partition FAT32 ou
+NTFS est par contre obligatoire. L'arborescence de la partition contenant CEFULL
+doit être la suivante :
+
+─┬─stboot/
+ │   │
+ │   └CEFULL  (notre propre chargeur d'amorçage)
+ │
+ └─splash.idx (indique l'emplacement de CEFULL)
+
+Cette arborescence prête à l'emploi est disponible dans le dossier root-example.
+À ce moment-là, la configuration du chargeur d'amorçage dépend entièrement de
+vous. Dans l'installation par défaut, le bootsect.bin inclus dans CEFULL est un
+chargeur d'amorçage minimal qui recherche et charge le secteur de boot de la
+première partition active trouvée.
+
+Cependant, vous êtes libre d'intégrer votre propre secteur de boot dans CEFULL,
+Typiquement, l'extraction d'un secteur de boot sous Linux (ou Unix-like)
+s'effectue avec le programme dd de cette manière :
+
+  # dd if=/dev/[disque|partition] of=1st_sect.bin bs=512 count=1
+
+Référez-vous au paragraphe "Assemblage" au-dessus pour l'intégration du secteur
+de boot dans CEFULL.
+
+Limitations connues
+-------------------
+- Le "memory mapping" ne se produit que dans un espace mémoire 32 bits, le BIOS
+ne fait pas apparemment de "memory hole remapping" quand Splashtop est démarré,
+puisque Splashtop OS est censé être uniquement un système 32 bits. Cela ne
+devrait pas vous empêcher de charger un noyau 64 bits mais il ne pourra jamais
+accéder à plus de 4 Go de RAM (et environ 3 Go en pratique à cause du MMIO).
+- Les contrôleurs SATA sont limités au mode Compatible (IDE), même si le BIOS
+supporte le mode AHCI en temps normal.
+
+---
+FIN DU README

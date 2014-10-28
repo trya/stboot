@@ -1,0 +1,29 @@
+stboot 0.2.1 (2012/25/10)
+------------
+- Added support for systems with more than one HDD
+- Fixed typos in source files and READMEs
+
+stboot 0.2 (2011/29/11)
+----------
+- Implemented a simple bootloader as a separate program, which loads the
+  the VBR of an active partition
+- GRUB4DOS is not included anymore, since it became useless (but it can
+  still be used as an alternative bootsect.bin)
+- Set the correct video mode for text mode programs
+- Added a procedure to display some messages
+- Introduced a function-like macro to calculate real mode addresses
+- Changes in the README in order to reflect the latest changes
+
+stboot 0.1.1 (2011/08/26)
+------------
+- Code clean-up:
+  - removal of unneeded instructions
+  - optimization of the copy instructions, by moving double-words
+    instead of bytes
+  - improve code readability with macro definition of constants
+  - correction of some comments
+- Minor corrections in the README
+
+stboot 0.1 (2011/08/21)
+----------
+- Initial release
