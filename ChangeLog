@@ -1,9 +1,9 @@
-stboot 0.2.1 (2012/25/10)
+stboot 0.2.1 (2012/10/25)
 ------------
 - Added support for systems with more than one HDD
 - Fixed typos in source files and READMEs
 
-stboot 0.2 (2011/29/11)
+stboot 0.2 (2011/11/29)
 ----------
 - Implemented a simple bootloader as a separate program, which loads the
   the VBR of an active partition
